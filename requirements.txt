@@ -1,0 +1,9 @@
+requests
+beautifulsoup4
+lxml
+python-dotenv
+flask
+flask-login
+apscheduler
+gunicorn
+openpyxl

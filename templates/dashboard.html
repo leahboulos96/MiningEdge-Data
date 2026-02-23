@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Scraper Dashboard{% endblock %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <h2 style="font-size: 20px;">Scrapers</h2>
+    <a href="{{ url_for('run_scraper', scraper_key='all') }}" class="btn btn-success">Run All Scrapers</a>
+</div>
+
+<div class="grid">
+{% for key, (label, cls) in scrapers.items() %}
+    {% set status = scraper_status.get(key, {}) %}
+    {% set is_running = running_scrapers.get(key, false) %}
+    <div class="card" id="scraper-{{ key }}">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0;">{{ label }}</h2>
+            <span class="badge" id="badge-{{ key }}">
+            {% if is_running %}
+                <span class="badge badge-running">Running</span>
+            {% elif status.get('status') == 'completed' %}
+                <span class="badge badge-completed">Completed</span>
+            {% elif status.get('status') == 'error' %}
+                <span class="badge badge-error">Error</span>
+            {% else %}
+                <span class="badge badge-idle">Idle</span>
+            {% endif %}
+            </span>
+        </div>
+
+        <div id="info-{{ key }}">
+        {% if status %}
+        <table>
+            {% if status.get('started') %}
+            <tr><td style="width: 100px; color: #718096;">Started</td><td>{{ status.started }}</td></tr>
+            {% endif %}
+            {% if status.get('finished') %}
+            <tr><td style="color: #718096;">Finished</td><td>{{ status.finished }}</td></tr>
+            {% endif %}
+            <tr><td style="color: #718096;">Items</td><td>{{ status.get('items', 0) }}</td></tr>
+            <tr><td style="color: #718096;">Errors</td><td>{{ status.get('errors', 0) }}</td></tr>
+            {% if status.get('error_message') %}
+            <tr><td style="color: #718096;">Message</td><td style="color: #c53030;">{{ status.error_message[:100] }}</td></tr>
+            {% endif %}
+        </table>
+        {% else %}
+        <p style="color: #a0aec0; font-size: 13px;">No runs yet</p>
+        {% endif %}
+        </div>
+
+        <div style="margin-top: 12px;" id="btn-{{ key }}">
+            {% if not is_running %}
+            <a href="{{ url_for('run_scraper', scraper_key=key) }}" class="btn btn-primary btn-sm">Run Now</a>
+            {% else %}
+            <span class="btn btn-sm" style="background: #e2e8f0; color: #718096; cursor: not-allowed;">Running...</span>
+            {% endif %}
+        </div>
+    </div>
+{% endfor %}
+</div>
+
+<div class="card" style="margin-top: 24px;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h2 style="margin: 0;">Output Files</h2>
+        {% if output_files %}
+        <a href="{{ url_for('delete_all_output') }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete all output files?')">Delete All</a>
+        {% endif %}
+    </div>
+    {% if output_files %}
+    <table>
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Records</th>
+                <th>Size</th>
+                <th>Modified</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for f in output_files %}
+            <tr>
+                <td>{{ f.name }}</td>
+                <td>{{ f.records }}</td>
+                <td>{{ "%.1f"|format(f.size / 1024) }} KB</td>
+                <td>{{ f.modified }}</td>
+                <td style="white-space: nowrap;">
+                    <a href="{{ url_for('view_output', filename=f.name) }}" class="btn btn-sm btn-success">View</a>
+                    <a href="{{ url_for('download_output', filename=f.name) }}" class="btn btn-sm btn-primary">JSON</a>
+                    <a href="{{ url_for('download_csv', filename=f.name) }}" class="btn btn-sm btn-primary">CSV</a>
+                    <a href="{{ url_for('download_xlsx', filename=f.name) }}" class="btn btn-sm btn-primary">XLSX</a>
+                    <a href="{{ url_for('delete_output', filename=f.name) }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete {{ f.name }}?')">Delete</a>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p style="color: #a0aec0; font-size: 13px;">No output files yet. Run a scraper to generate data.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// AJAX status polling - always active, updates cards without page reload
+(function() {
+    var scraperKeys = {{ scrapers.keys()|list|tojson }};
+    var runUrls = {};
+    {% for key in scrapers.keys() %}
+    runUrls["{{ key }}"] = "{{ url_for('run_scraper', scraper_key=key) }}";
+    {% endfor %}
+
+    function updateStatus() {
+        fetch("{{ url_for('status_api') }}")
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                var statuses = data.scraper_status || {};
+                var running = data.running || {};
+
+                for (var i = 0; i < scraperKeys.length; i++) {
+                    var key = scraperKeys[i];
+                    var s = statuses[key] || {};
+                    var isRunning = !!running[key];
+
+                    // Update badge
+                    var badgeEl = document.getElementById("badge-" + key);
+                    if (badgeEl) {
+                        if (isRunning) {
+                            badgeEl.innerHTML = '<span class="badge badge-running">Running</span>';
+                        } else if (s.status === "completed") {
+                            badgeEl.innerHTML = '<span class="badge badge-completed">Completed</span>';
+                        } else if (s.status === "error") {
+                            badgeEl.innerHTML = '<span class="badge badge-error">Error</span>';
+                        } else {
+                            badgeEl.innerHTML = '<span class="badge badge-idle">Idle</span>';
+                        }
+                    }
+
+                    // Update info table
+                    var infoEl = document.getElementById("info-" + key);
+                    if (infoEl && s.status) {
+                        var html = "<table>";
+                        if (s.started) html += '<tr><td style="width:100px;color:#718096;">Started</td><td>' + s.started + '</td></tr>';
+                        if (s.finished) html += '<tr><td style="color:#718096;">Finished</td><td>' + s.finished + '</td></tr>';
+                        html += '<tr><td style="color:#718096;">Items</td><td>' + (s.items || 0) + '</td></tr>';
+                        html += '<tr><td style="color:#718096;">Errors</td><td>' + (s.errors || 0) + '</td></tr>';
+                        if (s.error_message) html += '<tr><td style="color:#718096;">Message</td><td style="color:#c53030;">' + s.error_message.substring(0, 100) + '</td></tr>';
+                        html += "</table>";
+                        infoEl.innerHTML = html;
+                    }
+
+                    // Update button
+                    var btnEl = document.getElementById("btn-" + key);
+                    if (btnEl) {
+                        if (isRunning) {
+                            btnEl.innerHTML = '<span class="btn btn-sm" style="background:#e2e8f0;color:#718096;cursor:not-allowed;">Running...</span>';
+                        } else {
+                            btnEl.innerHTML = '<a href="' + runUrls[key] + '" class="btn btn-primary btn-sm">Run Now</a>';
+                        }
+                    }
+                }
+            })
+            .catch(function() {});
+
+        // Always keep polling while on dashboard
+        setTimeout(updateStatus, 3000);
+    }
+
+    // First update immediately on page load, then every 3s
+    updateStatus();
+})();
+</script>
+{% endblock %}

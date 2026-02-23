@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{{ filename }} - Scraper Dashboard{% endblock %}
+{% block content %}
+
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+    <div>
+        <h2 style="font-size: 20px; margin-bottom: 4px;">{{ filename }}</h2>
+        <span style="font-size: 13px; color: #718096;">{{ count }} records</span>
+    </div>
+    <div>
+        <a href="{{ url_for('download_output', filename=filename) }}" class="btn btn-primary btn-sm">Download</a>
+        <a href="{{ url_for('dashboard') }}" class="btn btn-sm" style="background: #e2e8f0; color: #4a5568;">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="card">
+    <pre>{{ content }}</pre>
+</div>
+
+{% endblock %}

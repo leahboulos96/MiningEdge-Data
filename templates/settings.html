@@ -1,0 +1,121 @@
+{% extends "base.html" %}
+{% block title %}Settings - Scraper Dashboard{% endblock %}
+{% block content %}
+
+<h2 style="font-size: 20px; margin-bottom: 16px;">Settings</h2>
+
+<form method="POST">
+    <div class="card">
+        <h2>Proxy Configuration</h2>
+        <div class="form-group">
+            <label for="scrape_do_token">Scrape.do API Token</label>
+            <input type="password" id="scrape_do_token" name="scrape_do_token" value="{{ settings.scrape_do_token }}">
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>ASX Tickers</h2>
+        <div class="form-group">
+            <label for="asx_tickers">Mining Tickers (comma-separated)</label>
+            <textarea id="asx_tickers" name="asx_tickers" rows="6" style="font-family: monospace; font-size: 13px;">{{ settings.asx_tickers | join(', ') }}</textarea>
+            <div style="font-size: 12px; color: #a0aec0; margin-top: 4px;">
+                Currently {{ settings.asx_tickers | length }} tickers configured
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>ICN Gateway Cookies</h2>
+        <div style="font-size: 12px; color: #a0aec0; margin-bottom: 12px;">
+            ICN Gateway requires manual login (2FA). Log in at
+            <a href="https://gateway.icn.org.au" target="_blank" style="color: #63b3ed;">gateway.icn.org.au</a>,
+            then copy the 4 cookie values from Chrome DevTools (Application &gt; Cookies).
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+            <div class="form-group">
+                <label for="icn_phpsessid">PHPSESSID</label>
+                <input type="text" id="icn_phpsessid" name="icn_phpsessid"
+                    value="{{ icn_cookies.get('PHPSESSID', '') }}"
+                    placeholder="e.g. 839mleddns0aktdulh306leeic"
+                    style="font-family: monospace; font-size: 12px;">
+            </div>
+            <div class="form-group">
+                <label for="icn_remember_tfa">remember_tfa_gateway</label>
+                <input type="text" id="icn_remember_tfa" name="icn_remember_tfa"
+                    value="{{ icn_cookies.get('remember_tfa_gateway', '') }}"
+                    placeholder="eyJpdi..."
+                    style="font-family: monospace; font-size: 12px;">
+            </div>
+            <div class="form-group">
+                <label for="icn_xsrf">XSRF-TOKEN</label>
+                <input type="text" id="icn_xsrf" name="icn_xsrf"
+                    value="{{ icn_cookies.get('XSRF-TOKEN', '') }}"
+                    placeholder="eyJpdi..."
+                    style="font-family: monospace; font-size: 12px;">
+            </div>
+            <div class="form-group">
+                <label for="icn_session">gateway_by_icn_session</label>
+                <input type="text" id="icn_session" name="icn_session"
+                    value="{{ icn_cookies.get('gateway_by_icn_session', '') }}"
+                    placeholder="eyJpdi..."
+                    style="font-family: monospace; font-size: 12px;">
+            </div>
+        </div>
+        <div style="font-size: 12px; color: #a0aec0; margin-top: 4px;">
+            {% if icn_cookies.get('PHPSESSID') %}
+            Cookies loaded. The scraper will auto-update them after each run.
+            {% else %}
+            No cookies configured. ICN Gateway scraper will be skipped until cookies are provided.
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Enabled Scrapers</h2>
+        {% for key, (label, cls) in scrapers.items() %}
+        <div style="margin-bottom: 8px;">
+            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" name="enabled_scrapers" value="{{ key }}"
+                    {% if key in settings.enabled_scrapers %}checked{% endif %}
+                    style="width: auto; margin-right: 8px;">
+                {{ label }}
+            </label>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="card">
+        <h2>Scheduling</h2>
+        <div style="margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
+                <input type="checkbox" name="schedule_enabled"
+                    {% if settings.schedule_enabled %}checked{% endif %}
+                    style="width: auto; margin-right: 8px;">
+                Enable daily scheduled run
+            </label>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+            <div class="form-group">
+                <label for="schedule_hour">Hour (0-23)</label>
+                <input type="number" id="schedule_hour" name="schedule_hour" min="0" max="23"
+                    value="{{ settings.schedule_hour }}">
+            </div>
+            <div class="form-group">
+                <label for="schedule_minute">Minute (0-59)</label>
+                <input type="number" id="schedule_minute" name="schedule_minute" min="0" max="59"
+                    value="{{ settings.schedule_minute }}">
+            </div>
+        </div>
+        <div style="font-size: 12px; color: #a0aec0;">
+            {% if settings.schedule_enabled %}
+            Scheduled to run daily at {{ "%02d"|format(settings.schedule_hour) }}:{{ "%02d"|format(settings.schedule_minute) }}
+            {% else %}
+            Scheduling is disabled
+            {% endif %}
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary" style="margin-top: 8px;">Save Settings</button>
+</form>
+
+{% endblock %}
