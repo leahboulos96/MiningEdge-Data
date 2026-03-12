@@ -12,6 +12,7 @@ from scrapers.tenders.wa_tenders import WATendersScraper
 from scrapers.tenders.qld_tenders import QLDTendersScraper
 from scrapers.tenders.sa_tenders import SATendersScraper
 from scrapers.tenders.icn_gateway import ICNGatewayScraper
+from scrapers.tenders.icn_workpackages import ICNWorkpackagesScraper
 from scrapers.asx.asx_scraper import ASXScraper
 
 
@@ -27,7 +28,8 @@ def main():
         ("WA Tenders", WATendersScraper),
         ("QLD QTenders", QLDTendersScraper),
         ("SA Tenders", SATendersScraper),
-        ("ICN Gateway", ICNGatewayScraper),
+        ("ICN Gateway (Projects)", ICNGatewayScraper),
+        ("ICN Gateway (Work Packages)", ICNWorkpackagesScraper),
         ("ASX Announcements", ASXScraper),
     ]
 

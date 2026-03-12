@@ -5,8 +5,10 @@ Features: Login, dashboard, manual run, logs viewer, settings, scheduling.
 
 import os
 import io
+import re
 import csv
 import json
+import zipfile
 import threading
 from datetime import datetime
 from functools import wraps
@@ -20,6 +22,7 @@ from scrapers.tenders.wa_tenders import WATendersScraper
 from scrapers.tenders.qld_tenders import QLDTendersScraper
 from scrapers.tenders.sa_tenders import SATendersScraper
 from scrapers.tenders.icn_gateway import ICNGatewayScraper
+from scrapers.tenders.icn_workpackages import ICNWorkpackagesScraper
 from scrapers.asx.asx_scraper import ASXScraper
 
 app = Flask(__name__)
@@ -36,7 +39,8 @@ SCRAPER_MAP = {
     "wa_tenders": ("WA Tenders", WATendersScraper),
     "qld_tenders": ("QLD QTenders", QLDTendersScraper),
     "sa_tenders": ("SA Tenders", SATendersScraper),
-    "icn_gateway": ("ICN Gateway", ICNGatewayScraper),
+    "icn_gateway": ("ICN Gateway (Projects)", ICNGatewayScraper),
+    "icn_workpackages": ("ICN Gateway (Work Packages)", ICNWorkpackagesScraper),
     "asx_announcements": ("ASX Announcements", ASXScraper),
 }
 
@@ -478,6 +482,192 @@ def settings():
     icn_cookies = load_icn_cookies()
 
     return render_template("settings.html", settings=current, scrapers=SCRAPER_MAP, icn_cookies=icn_cookies)
+
+
+# --- Backup / Restore ---
+
+def _get_available_months():
+    """Scan output and log files to find available YYYY-MM months."""
+    months = set()
+    date_pattern = re.compile(r"(\d{4})[-_]?(\d{2})[-_]?\d{2}")
+    for d in (config.OUTPUT_DIR, config.LOGS_DIR):
+        if os.path.exists(d):
+            for fn in os.listdir(d):
+                m = date_pattern.search(fn)
+                if m:
+                    months.add(f"{m.group(1)}-{m.group(2)}")
+    return sorted(months, reverse=True)
+
+
+def _get_available_scrapers():
+    """Scan output files to find scraper prefixes that have data."""
+    scrapers = set()
+    if os.path.exists(config.OUTPUT_DIR):
+        for fn in os.listdir(config.OUTPUT_DIR):
+            if fn.endswith(".json"):
+                # filename pattern: scrapername_YYYYMMDD.json
+                parts = fn.rsplit("_", 1)
+                if len(parts) == 2:
+                    scrapers.add(parts[0])
+    return sorted(scrapers)
+
+
+def _file_matches_filters(filename, month_filter, scraper_filter):
+    """Check if a filename matches the selected month and/or scraper filters."""
+    if month_filter:
+        date_pattern = re.compile(r"(\d{4})[-_]?(\d{2})[-_]?\d{2}")
+        m = date_pattern.search(filename)
+        if not m or f"{m.group(1)}-{m.group(2)}" != month_filter:
+            return False
+    if scraper_filter:
+        parts = filename.rsplit("_", 1)
+        if len(parts) < 2 or parts[0] != scraper_filter:
+            return False
+    return True
+
+
+@app.route("/backup")
+@login_required
+def backup():
+    months = _get_available_months()
+    scrapers = _get_available_scrapers()
+    output_count = len([f for f in os.listdir(config.OUTPUT_DIR) if f.endswith(".json")]) if os.path.exists(config.OUTPUT_DIR) else 0
+    log_count = len([f for f in os.listdir(config.LOGS_DIR) if f.endswith(".log")]) if os.path.exists(config.LOGS_DIR) else 0
+    has_settings = os.path.exists(SETTINGS_FILE)
+    has_cookies = os.path.exists(config.ICN_COOKIES_FILE)
+    return render_template(
+        "backup.html",
+        months=months,
+        scrapers=scrapers,
+        output_count=output_count,
+        log_count=log_count,
+        has_settings=has_settings,
+        has_cookies=has_cookies,
+    )
+
+
+@app.route("/backup/export", methods=["POST"])
+@login_required
+def backup_export():
+    month_filter = request.form.get("month", "").strip()
+    scraper_filter = request.form.get("scraper", "").strip()
+    include_settings = "include_settings" in request.form
+    include_cookies = "include_cookies" in request.form
+    include_logs = "include_logs" in request.form
+
+    buf = io.BytesIO()
+    file_count = 0
+
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        # Output files
+        if os.path.exists(config.OUTPUT_DIR):
+            for fn in sorted(os.listdir(config.OUTPUT_DIR)):
+                if fn.endswith(".json") and _file_matches_filters(fn, month_filter, scraper_filter):
+                    zf.write(os.path.join(config.OUTPUT_DIR, fn), f"output/{fn}")
+                    file_count += 1
+
+        # Log files
+        if include_logs and os.path.exists(config.LOGS_DIR):
+            for fn in sorted(os.listdir(config.LOGS_DIR)):
+                if fn.endswith(".log") and _file_matches_filters(fn, month_filter, scraper_filter):
+                    zf.write(os.path.join(config.LOGS_DIR, fn), f"logs/{fn}")
+                    file_count += 1
+
+        # Settings
+        if include_settings and os.path.exists(SETTINGS_FILE):
+            zf.write(SETTINGS_FILE, "settings.json")
+            file_count += 1
+
+        # ICN cookies
+        if include_cookies and os.path.exists(config.ICN_COOKIES_FILE):
+            zf.write(config.ICN_COOKIES_FILE, "icn_cookies.json")
+            file_count += 1
+
+    if file_count == 0:
+        flash("No files matched the selected filters", "warning")
+        return redirect(url_for("backup"))
+
+    buf.seek(0)
+
+    # Build descriptive filename
+    parts = ["miningedge_backup"]
+    if scraper_filter:
+        parts.append(scraper_filter)
+    if month_filter:
+        parts.append(month_filter)
+    parts.append(datetime.now().strftime("%Y%m%d_%H%M%S"))
+    zip_name = "_".join(parts) + ".zip"
+
+    return send_file(buf, mimetype="application/zip", as_attachment=True, download_name=zip_name)
+
+
+@app.route("/backup/import", methods=["POST"])
+@login_required
+def backup_import():
+    uploaded = request.files.get("backup_file")
+    if not uploaded or not uploaded.filename.endswith(".zip"):
+        flash("Please upload a .zip file", "error")
+        return redirect(url_for("backup"))
+
+    imported = {"output": 0, "logs": 0, "settings": False, "cookies": False}
+
+    try:
+        with zipfile.ZipFile(uploaded.stream, "r") as zf:
+            for info in zf.infolist():
+                if info.is_dir():
+                    continue
+
+                name = info.filename
+                # Sanitize: skip anything with path traversal
+                if ".." in name or name.startswith("/"):
+                    continue
+
+                if name.startswith("output/") and name.endswith(".json"):
+                    fn = os.path.basename(name)
+                    target = os.path.join(config.OUTPUT_DIR, fn)
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        dst.write(src.read())
+                    imported["output"] += 1
+
+                elif name.startswith("logs/") and name.endswith(".log"):
+                    fn = os.path.basename(name)
+                    target = os.path.join(config.LOGS_DIR, fn)
+                    with zf.open(info) as src, open(target, "wb") as dst:
+                        dst.write(src.read())
+                    imported["logs"] += 1
+
+                elif name == "settings.json":
+                    with zf.open(info) as src:
+                        data = json.loads(src.read().decode("utf-8"))
+                    save_settings(data)
+                    config.SCRAPE_DO_TOKEN = data.get("scrape_do_token", config.SCRAPE_DO_TOKEN)
+                    config.ASX_TICKERS = data.get("asx_tickers", config.ASX_TICKERS)
+                    _update_schedule(data)
+                    imported["settings"] = True
+
+                elif name == "icn_cookies.json":
+                    with zf.open(info) as src:
+                        data = json.loads(src.read().decode("utf-8"))
+                    save_icn_cookies(data)
+                    imported["cookies"] = True
+
+        parts = []
+        if imported["output"]:
+            parts.append(f"{imported['output']} output files")
+        if imported["logs"]:
+            parts.append(f"{imported['logs']} log files")
+        if imported["settings"]:
+            parts.append("settings")
+        if imported["cookies"]:
+            parts.append("ICN cookies")
+        flash(f"Imported: {', '.join(parts)}", "success")
+
+    except zipfile.BadZipFile:
+        flash("Invalid zip file", "error")
+    except Exception as e:
+        flash(f"Import error: {str(e)}", "error")
+
+    return redirect(url_for("backup"))
 
 
 def _update_schedule(settings):
