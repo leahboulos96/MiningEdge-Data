@@ -11,6 +11,8 @@ from scrapers.base_scraper import BaseScraper
 
 class WATendersScraper(BaseScraper):
     name = "wa_tenders"
+    source_group = "tenders"
+    record_type = "tender"
 
     BASE_URL = "https://www.tenders.wa.gov.au/watenders"
     SEARCH_URL = "https://www.tenders.wa.gov.au/watenders/tender/search/tender-search.action"

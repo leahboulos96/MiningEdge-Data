@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Scrapers{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Registered scrapers
+        <span class="help" data-tip="Every scraper in the system. Use 'Run now' to fire one immediately; history is recorded per run. Adding a new scraper is a one-line registry edit.">?</span>
+    </h2>
+    <p>
+        <a href="{{ url_for('run_scraper', key='all') }}" class="btn btn-primary">Run ALL</a>
+        {% for group, keys in groups.items() %}
+            <a href="{{ url_for('run_scraper', key='group:' + group) }}" class="btn btn-ghost">Run group: {{ group }}</a>
+        {% endfor %}
+    </p>
+    <form method="post" action="{{ url_for('clear_scraper_runs_route') }}" class="row" style="margin-top:12px;" onsubmit="return confirm('Clear run history?');">
+        <div>
+            <label>Clear runs older than (days, optional)
+                <span class="help" data-tip="Leave blank to clear ALL finished runs. Actively running scrapers are never deleted.">?</span>
+            </label>
+            <input type="number" name="older_than_days" min="0" placeholder="e.g. 30">
+        </div>
+        <div style="flex:0 0 auto;"><label>&nbsp;</label>
+            <button class="btn btn-warn">Clear history</button></div>
+    </form>
+    <form method="post" action="{{ url_for('wipe_all_scraper_runs') }}" style="margin-top:8px;"
+          onsubmit="if(!confirm('Delete ALL finished scraper runs?')) return false; return prompt('Type DELETE to confirm:')==='DELETE';">
+        <input type="hidden" name="confirm" value="yes">
+        <button class="btn btn-sm btn-danger">Delete ALL run history
+            <span class="help" data-tip="Removes every finished scraper-run row. Actively running scrapers are preserved. Log files on disk are untouched - delete those from the Logs page.">?</span>
+        </button>
+    </form>
+</div>
+
+{% for group, keys in groups.items() %}
+<div class="card">
+    <h2>{{ group|title }} ({{ keys|length }})</h2>
+    <table>
+        <thead><tr><th>Scraper</th><th>Key</th><th>Last run</th><th>Status</th><th>Last found / new</th><th></th></tr></thead>
+        <tbody>
+        {% for key in keys %}
+            {% set label = registry[key][0] %}
+            {% set last = runs_by_key.get(key, [{}])[0] %}
+            <tr>
+                <td><strong>{{ label }}</strong></td>
+                <td class="muted">{{ key }}</td>
+                <td>{{ last.started_at or "—" }}</td>
+                <td>
+                    {% if key in running %}
+                        <span class="badge badge-running">running</span>
+                    {% elif last.status %}
+                        <span class="badge badge-{{ 'ok' if last.status=='completed' else last.status }}">{{ last.status }}</span>
+                    {% else %}
+                        <span class="badge badge-idle">never run</span>
+                    {% endif %}
+                </td>
+                <td>{{ last.items_found or 0 }} / <strong>{{ last.items_new or 0 }}</strong></td>
+                <td><a class="btn btn-sm btn-primary" href="{{ url_for('run_scraper', key=key) }}">Run now</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+{% endblock %}

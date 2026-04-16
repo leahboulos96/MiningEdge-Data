@@ -11,3 +11,5 @@ build/
 icn_cookies.json
 .venv/
 venv/
+.pytest_cache/
+miningedge.db

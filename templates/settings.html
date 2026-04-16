@@ -1,121 +1,104 @@
 {% extends "base.html" %}
-{% block title %}Settings - Scraper Dashboard{% endblock %}
+{% block title %}Settings{% endblock %}
 {% block content %}
 
-<h2 style="font-size: 20px; margin-bottom: 16px;">Settings</h2>
-
-<form method="POST">
-    <div class="card">
-        <h2>Proxy Configuration</h2>
-        <div class="form-group">
-            <label for="scrape_do_token">Scrape.do API Token</label>
-            <input type="password" id="scrape_do_token" name="scrape_do_token" value="{{ settings.scrape_do_token }}">
-        </div>
+<form method="post">
+<div class="card">
+    <h2>Proxy & ASX</h2>
+    <div class="form-group">
+        <label>scrape.do token
+            <span class="help" data-tip="Used as a proxy for government tender portals that block direct requests. Get a free token at scrape.do.">?</span>
+        </label>
+        <input type="text" name="scrape_do_token" value="{{ settings.scrape_do_token }}">
     </div>
-
-    <div class="card">
-        <h2>ASX Tickers</h2>
-        <div class="form-group">
-            <label for="asx_tickers">Mining Tickers (comma-separated)</label>
-            <textarea id="asx_tickers" name="asx_tickers" rows="6" style="font-family: monospace; font-size: 13px;">{{ settings.asx_tickers | join(', ') }}</textarea>
-            <div style="font-size: 12px; color: #a0aec0; margin-top: 4px;">
-                Currently {{ settings.asx_tickers | length }} tickers configured
-            </div>
-        </div>
+    <div class="form-group">
+        <label>ASX tickers (comma or newline separated)
+            <span class="help" data-tip="List of ASX tickers to pull announcements for. Supports up to ~250 tickers; ~0.5s per ticker.">?</span>
+        </label>
+        <textarea name="asx_tickers" rows="4">{{ settings.asx_tickers|join(', ') }}</textarea>
     </div>
+</div>
 
-    <div class="card">
-        <h2>ICN Gateway Cookies</h2>
-        <div style="font-size: 12px; color: #a0aec0; margin-bottom: 12px;">
-            ICN Gateway requires manual login (2FA). Log in at
-            <a href="https://gateway.icn.org.au" target="_blank" style="color: #63b3ed;">gateway.icn.org.au</a>,
-            then copy the 4 cookie values from Chrome DevTools (Application &gt; Cookies).
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-            <div class="form-group">
-                <label for="icn_phpsessid">PHPSESSID</label>
-                <input type="text" id="icn_phpsessid" name="icn_phpsessid"
-                    value="{{ icn_cookies.get('PHPSESSID', '') }}"
-                    placeholder="e.g. 839mleddns0aktdulh306leeic"
-                    style="font-family: monospace; font-size: 12px;">
-            </div>
-            <div class="form-group">
-                <label for="icn_remember_tfa">remember_tfa_gateway</label>
-                <input type="text" id="icn_remember_tfa" name="icn_remember_tfa"
-                    value="{{ icn_cookies.get('remember_tfa_gateway', '') }}"
-                    placeholder="eyJpdi..."
-                    style="font-family: monospace; font-size: 12px;">
-            </div>
-            <div class="form-group">
-                <label for="icn_xsrf">XSRF-TOKEN</label>
-                <input type="text" id="icn_xsrf" name="icn_xsrf"
-                    value="{{ icn_cookies.get('XSRF-TOKEN', '') }}"
-                    placeholder="eyJpdi..."
-                    style="font-family: monospace; font-size: 12px;">
-            </div>
-            <div class="form-group">
-                <label for="icn_session">gateway_by_icn_session</label>
-                <input type="text" id="icn_session" name="icn_session"
-                    value="{{ icn_cookies.get('gateway_by_icn_session', '') }}"
-                    placeholder="eyJpdi..."
-                    style="font-family: monospace; font-size: 12px;">
-            </div>
-        </div>
-        <div style="font-size: 12px; color: #a0aec0; margin-top: 4px;">
-            {% if icn_cookies.get('PHPSESSID') %}
-            Cookies loaded. The scraper will auto-update them after each run.
-            {% else %}
-            No cookies configured. ICN Gateway scraper will be skipped until cookies are provided.
-            {% endif %}
-        </div>
+<div class="card">
+    <h2>ICN Gateway cookies
+        <span class="help" data-tip="ICN requires manual 2FA login. Log in via Chrome, open DevTools → Application → Cookies, and paste the 4 cookie values here. See README section 5.1 for screenshots.">?</span>
+    </h2>
+    <div class="form-group"><label>PHPSESSID</label>
+        <input type="text" name="icn_phpsessid" value="{{ icn_cookies.get('PHPSESSID','') }}"></div>
+    <div class="form-group"><label>remember_tfa_gateway</label>
+        <input type="text" name="icn_remember_tfa" value="{{ icn_cookies.get('remember_tfa_gateway','') }}"></div>
+    <div class="form-group"><label>XSRF-TOKEN</label>
+        <input type="text" name="icn_xsrf" value="{{ icn_cookies.get('XSRF-TOKEN','') }}"></div>
+    <div class="form-group"><label>gateway_by_icn_session</label>
+        <input type="text" name="icn_session" value="{{ icn_cookies.get('gateway_by_icn_session','') }}"></div>
+</div>
+
+<div class="card">
+    <h2>AI enrichment (DeepSeek)
+        <span class="help" data-tip="DeepSeek is an inexpensive, capable LLM. Paste an API key here to enable the 'Run enrichment' button on record detail pages. Leave blank to disable AI.">?</span>
+    </h2>
+    <div class="form-group">
+        <label>DeepSeek API key</label>
+        <input type="text" name="deepseek_api_key" value="{{ deepseek_key }}" placeholder="sk-...">
     </div>
+    <p class="muted" style="margin-top:-8px;">
+        <strong>How to get a key:</strong> 1) sign up at
+        <a href="https://platform.deepseek.com/" target="_blank">platform.deepseek.com</a>,
+        2) top up a few dollars of credit (pay-as-you-go),
+        3) open <em>API Keys</em> in the sidebar,
+        4) click <em>Create new API key</em>, copy it, paste above, save.
+    </p>
+</div>
 
-    <div class="card">
-        <h2>Enabled Scrapers</h2>
-        {% for key, (label, cls) in scrapers.items() %}
-        <div style="margin-bottom: 8px;">
-            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
-                <input type="checkbox" name="enabled_scrapers" value="{{ key }}"
-                    {% if key in settings.enabled_scrapers %}checked{% endif %}
-                    style="width: auto; margin-right: 8px;">
-                {{ label }}
-            </label>
-        </div>
-        {% endfor %}
-    </div>
+<div class="card">
+    <h2>Outbound webhook
+        <span class="help" data-tip="When an analyst approves a record, MiningEdge POSTs a JSON payload to this URL so your downstream platform can pick it up automatically. Leave blank to skip.">?</span>
+    </h2>
+    <div class="form-group"><label>Webhook URL</label>
+        <input type="text" name="webhook_url" value="{{ webhook_url }}" placeholder="https://your-platform.example.com/hooks/miningedge"></div>
+    <div class="form-group"><label>Shared secret (sent as X-MiningEdge-Secret header)</label>
+        <input type="text" name="webhook_secret" value="{{ webhook_secret }}"></div>
+</div>
 
-    <div class="card">
-        <h2>Scheduling</h2>
-        <div style="margin-bottom: 12px;">
-            <label style="display: flex; align-items: center; cursor: pointer; font-weight: normal;">
-                <input type="checkbox" name="schedule_enabled"
-                    {% if settings.schedule_enabled %}checked{% endif %}
-                    style="width: auto; margin-right: 8px;">
-                Enable daily scheduled run
-            </label>
-        </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
-            <div class="form-group">
-                <label for="schedule_hour">Hour (0-23)</label>
-                <input type="number" id="schedule_hour" name="schedule_hour" min="0" max="23"
-                    value="{{ settings.schedule_hour }}">
-            </div>
-            <div class="form-group">
-                <label for="schedule_minute">Minute (0-59)</label>
-                <input type="number" id="schedule_minute" name="schedule_minute" min="0" max="59"
-                    value="{{ settings.schedule_minute }}">
-            </div>
-        </div>
-        <div style="font-size: 12px; color: #a0aec0;">
-            {% if settings.schedule_enabled %}
-            Scheduled to run daily at {{ "%02d"|format(settings.schedule_hour) }}:{{ "%02d"|format(settings.schedule_minute) }}
-            {% else %}
-            Scheduling is disabled
-            {% endif %}
-        </div>
-    </div>
-
-    <button type="submit" class="btn btn-primary" style="margin-top: 8px;">Save Settings</button>
+<p><button class="btn btn-primary" type="submit">Save settings</button></p>
 </form>
+
+<div class="card">
+    <h2>REST API keys
+        <span class="help" data-tip="Issue an API key to let another system (analyst tool, internal dashboard, Zapier, etc.) read approved records. Endpoints: /api/v1/records, /api/v1/sources, /api/v1/records/:id. Send 'Authorization: Bearer <token>'.">?</span>
+    </h2>
+    <p class="muted" style="margin-bottom:12px;">
+        Base URL: <code>{{ request.host_url }}api/v1</code> &middot;
+        Example: <code>curl -H "Authorization: Bearer &lt;token&gt;" {{ request.host_url }}api/v1/records?status=approved</code>
+    </p>
+
+    <form method="post" action="{{ url_for('new_api_key') }}" class="row" style="margin-bottom:12px;">
+        <div><label>Key name (for your own reference)</label>
+            <input type="text" name="name" placeholder="e.g. Analyst dashboard"></div>
+        <div style="flex:0 0 auto;"><label>&nbsp;</label>
+            <button class="btn btn-primary">Create new key</button></div>
+    </form>
+
+    {% if api_keys %}
+    <table>
+        <thead><tr><th>Name</th><th>Created</th><th>Last used</th><th>Enabled</th><th></th></tr></thead>
+        <tbody>
+        {% for k in api_keys %}
+            <tr>
+                <td>{{ k.name }}</td>
+                <td>{{ k.created_at }}</td>
+                <td>{{ k.last_used or "—" }}</td>
+                <td>{{ "yes" if k.enabled else "no" }}</td>
+                <td>
+                    <form class="inline-form" method="post" action="{{ url_for('revoke_api_key', key_id=k.id) }}">
+                        <button class="btn btn-sm btn-danger">Revoke</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
 
 {% endblock %}

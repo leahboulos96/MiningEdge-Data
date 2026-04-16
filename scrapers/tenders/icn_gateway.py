@@ -18,6 +18,8 @@ import config
 
 class ICNGatewayScraper(BaseScraper):
     name = "icn_gateway"
+    source_group = "tenders"
+    record_type = "project"
 
     BASE_URL = config.ICN_GATEWAY_BASE_URL
     SEARCH_URL = f"{BASE_URL}/projects"

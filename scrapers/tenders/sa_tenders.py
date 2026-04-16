@@ -11,6 +11,8 @@ from scrapers.base_scraper import BaseScraper
 
 class SATendersScraper(BaseScraper):
     name = "sa_tenders"
+    source_group = "tenders"
+    record_type = "tender"
 
     BASE_URL = "https://www.tenders.sa.gov.au"
     SEARCH_URL = "https://www.tenders.sa.gov.au/tender/search"

@@ -10,6 +10,8 @@ from scrapers.base_scraper import BaseScraper
 
 class QLDTendersScraper(BaseScraper):
     name = "qld_tenders"
+    source_group = "tenders"
+    record_type = "tender"
 
     BASE_URL = "https://qtenders.hpw.qld.gov.au"
     API_URL = "https://qtenders.hpw.qld.gov.au/api/search/tenders"

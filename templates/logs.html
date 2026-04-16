@@ -2,15 +2,20 @@
 {% block title %}Logs - Scraper Dashboard{% endblock %}
 {% block content %}
 
-<h2 style="font-size: 20px; margin-bottom: 16px;">Log Files</h2>
+<h2 style="font-size: 20px; margin-bottom: 16px;">Log Files
+{% if log_files %}
+<form class="inline-form" method="post" action="{{ url_for('wipe_all_logs') }}" style="float:right;"
+      onsubmit="if(!confirm('Delete ALL log files?')) return false; return prompt('Type DELETE to confirm:')==='DELETE';">
+  <input type="hidden" name="confirm" value="yes">
+  <button class="btn btn-sm btn-danger">Delete all logs</button>
+</form>
+{% endif %}
+</h2>
 
 <div style="display: grid; grid-template-columns: 280px 1fr; gap: 16px;">
     <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
             <h2 style="margin: 0;">Files</h2>
-            {% if log_files %}
-            <a href="{{ url_for('delete_all_logs') }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete all log files?')">Delete All</a>
-            {% endif %}
         </div>
         {% if log_files %}
         <div style="max-height: 500px; overflow-y: auto;">

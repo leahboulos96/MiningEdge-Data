@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Groups{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Groups
+        <span class="help" data-tip="Groups bundle scrapers so you can schedule or run them together. Default groups (tenders / asx / news) ship with the app but can be renamed, edited or deleted. Create new groups to model your own workflows - e.g. 'vic-news', 'weekly-heavy', 'federal-only'.">?</span>
+    </h2>
+    <p><a class="btn btn-primary" href="{{ url_for('new_group') }}">+ New group</a></p>
+
+    {% if groups %}
+    <table>
+        <thead><tr><th>Name</th><th>Scrapers</th><th></th></tr></thead>
+        <tbody>
+        {% for name, keys in groups.items() %}
+            <tr>
+                <td><strong>{{ name }}</strong></td>
+                <td>
+                    {% for k in keys %}
+                        <span class="badge badge-idle">{{ registry_items[k][0] if k in registry_items else k }}</span>
+                    {% endfor %}
+                </td>
+                <td>
+                    <a class="btn btn-sm btn-ghost" href="{{ url_for('edit_group', name=name) }}">Edit</a>
+                    <a class="btn btn-sm btn-primary" href="{{ url_for('run_scraper', key='group:' + name) }}">Run now</a>
+                    <form class="inline-form" method="post" action="{{ url_for('delete_group_route', name=name) }}" onsubmit="return confirm('Delete group {{ name }}? Any schedule pointing at it will resolve to an empty list.');">
+                        <button class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No groups defined.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

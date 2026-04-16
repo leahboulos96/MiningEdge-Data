@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Schedule run history{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Schedule run history
+    {% if runs %}
+    <form class="inline-form" method="post" action="{{ url_for('wipe_all_schedule_runs') }}" style="float:right;"
+          onsubmit="if(!confirm('Delete ALL schedule runs?')) return false; return prompt('Type DELETE to confirm:')==='DELETE';">
+      <input type="hidden" name="confirm" value="yes">
+      <button class="btn btn-sm btn-danger">Delete all</button>
+    </form>
+    {% endif %}
+        <span class="help" data-tip="Every firing of every schedule is logged here - success, partial success (some scrapers failed, others ok), or full error.">?</span>
+    </h2>
+    {% if runs %}
+    <table>
+        <thead><tr><th>Schedule</th><th>Started</th><th>Ended</th><th>OK</th><th>Failed</th><th>New</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+        {% for r in runs %}
+            <tr>
+                <td>{{ r.schedule_name }}</td>
+                <td>{{ r.started_at }}</td>
+                <td>{{ r.ended_at or "" }}</td>
+                <td>{{ r.scrapers_ok }}</td>
+                <td>{{ r.scrapers_failed }}</td>
+                <td>{{ r.total_new }}</td>
+                <td><span class="badge badge-{{ r.status }}">{{ r.status }}</span></td>
+                <td>
+                    <a class="btn btn-sm btn-ghost" href="{{ url_for('schedule_run_detail', run_id=r.id) }}">Detail</a>
+                    <form class="inline-form" method="post" action="{{ url_for('delete_schedule_run_route', run_id=r.id) }}" onsubmit="return confirm('Remove this run?');">
+                        <button class="btn btn-sm btn-danger">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No schedule runs yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

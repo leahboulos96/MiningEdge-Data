@@ -1,69 +1,66 @@
 """
-Single-command entry point to run all scrapers.
-Usage: python run_all_scrapers.py
+CLI entry point for running every registered scraper once.
+Failures in one scraper never stop the rest; every run is recorded in the
+unified DB (miningedge.db) and as a dated JSON snapshot in output/.
+
+Usage:
+    python run_all_scrapers.py                # all scrapers
+    python run_all_scrapers.py tenders        # one group
+    python run_all_scrapers.py austender asx_announcements
 """
 
 import sys
 import time
 from datetime import datetime
 
-from scrapers.tenders.austender import AusTenderScraper
-from scrapers.tenders.wa_tenders import WATendersScraper
-from scrapers.tenders.qld_tenders import QLDTendersScraper
-from scrapers.tenders.sa_tenders import SATendersScraper
-from scrapers.tenders.icn_gateway import ICNGatewayScraper
-from scrapers.tenders.icn_workpackages import ICNWorkpackagesScraper
-from scrapers.asx.asx_scraper import ASXScraper
+import db
+import registry
+import scheduler as sched_mod
 
 
 def main():
-    start = time.time()
-    print(f"\n{'='*60}")
-    print(f"  Australian Tender & ASX Scraper")
-    print(f"  Run started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*60}\n")
+    db.init_db()
 
-    scrapers = [
-        ("AusTender (Federal)", AusTenderScraper),
-        ("WA Tenders", WATendersScraper),
-        ("QLD QTenders", QLDTendersScraper),
-        ("SA Tenders", SATendersScraper),
-        ("ICN Gateway (Projects)", ICNGatewayScraper),
-        ("ICN Gateway (Work Packages)", ICNWorkpackagesScraper),
-        ("ASX Announcements", ASXScraper),
-    ]
+    args = sys.argv[1:]
+    if not args:
+        keys = registry.all_keys()
+    else:
+        targets = []
+        for a in args:
+            if a in registry.groups():
+                targets.append(f"group:{a}")
+            else:
+                targets.append(a)
+        keys = registry.resolve_targets(targets)
+
+    start = time.time()
+    print(f"\n{'='*60}\n  MiningEdge - CLI run\n  Started: "
+          f"{datetime.now():%Y-%m-%d %H:%M:%S}\n{'='*60}")
 
     summary = []
+    for key in keys:
+        print(f"\n--- {registry.label(key)} ---")
+        result = sched_mod.run_single_scraper(key, triggered_by="cli")
+        summary.append((registry.label(key), result))
+        print(f"  -> {result.get('found',0)} found | "
+              f"{result.get('new',0)} new | "
+              f"{result.get('skipped',0)} skipped | "
+              f"status={result.get('status')}")
 
-    for label, scraper_cls in scrapers:
-        print(f"\n--- {label} ---")
-        scraper = scraper_cls()
-        results = scraper.execute()
-        count = len(results) if results else 0
-        errors = scraper.stats.get("errors", 0)
-        summary.append((label, count, errors))
-        print(f"  -> {count} items, {errors} errors")
+    print(f"\n{'='*60}\n  SUMMARY\n{'='*60}")
+    total_new = 0
+    errors = 0
+    for label, r in summary:
+        status = r.get("status")
+        flag = "OK" if status == "ok" else status.upper()
+        print(f"  {label:32s} new={r.get('new',0):4d}  [{flag}]")
+        total_new += r.get("new", 0)
+        if status != "ok":
+            errors += 1
+    print(f"\n  TOTAL NEW: {total_new}   Errors: {errors}   "
+          f"Runtime: {time.time()-start:.1f}s\n")
 
-    elapsed = time.time() - start
-
-    print(f"\n{'='*60}")
-    print(f"  SUMMARY")
-    print(f"{'='*60}")
-    total_items = 0
-    total_errors = 0
-    for label, count, errors in summary:
-        status = "OK" if errors == 0 else f"{errors} ERRORS"
-        print(f"  {label:30s} {count:6d} items  [{status}]")
-        total_items += count
-        total_errors += errors
-
-    print(f"  {'':30s} {'':6s}")
-    print(f"  {'TOTAL':30s} {total_items:6d} items  [{total_errors} errors]")
-    print(f"  Runtime: {elapsed:.1f}s")
-    print(f"  Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"{'='*60}\n")
-
-    return 0 if total_errors == 0 else 1
+    return 0 if errors == 0 else 1
 
 
 if __name__ == "__main__":

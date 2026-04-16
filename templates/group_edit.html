@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit group" if name else "New group" }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>{{ "Edit group: " + name if name else "New group" }}
+        <span class="help" data-tip="Pick the scrapers to include. Use the group name in schedules as 'group:yourname' to auto-include any scraper later added to the group.">?</span>
+    </h2>
+
+    <form method="post">
+        <div class="form-group">
+            <label>Group name</label>
+            <input type="text" name="name" value="{{ name or '' }}" required>
+        </div>
+
+        <div class="form-group">
+            <label>Members</label>
+            <div style="background:#f7fafc; padding:10px; border-radius:4px;">
+                {% for key, meta in registry_items.items() %}
+                    <label style="display:inline-block;margin-right:14px;font-weight:400;">
+                        <input type="checkbox" name="scrapers" value="{{ key }}" style="width:auto;"
+                            {% if key in scrapers %}checked{% endif %}>
+                        {{ meta[0] }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button class="btn btn-primary">Save group</button>
+        <a class="btn btn-ghost" href="{{ url_for('groups_page') }}">Cancel</a>
+    </form>
+</div>
+
+{% endblock %}

@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}{{ "Edit schedule" if row else "New schedule" }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>{{ "Edit schedule" if row else "New schedule" }}
+        <span class="help" data-tip="Cron fields: minute (0-59), hour (0-23), day-of-month (1-31 or *), month (1-12 or *), day-of-week (0-6 or *, 0=Mon). Example - every weekday at 6:30 AM: 30 6 * * 0-4">?</span>
+    </h2>
+
+    <form method="post">
+        <div class="form-group">
+            <label>Name</label>
+            <input type="text" name="name" value="{{ row.name if row else '' }}" required>
+        </div>
+        <div class="form-group">
+            <label>Description (optional)</label>
+            <input type="text" name="description" value="{{ row.description if row else '' }}">
+        </div>
+
+        <div class="card" style="background:#f7fafc;">
+            <h2 style="font-size:14px;">Cron schedule
+                <span class="help" data-tip="Use * for any value. You can use ranges (0-5), lists (1,3,5), or steps (*/15 = every 15 minutes).">?</span>
+            </h2>
+            <div class="row">
+                <div><label>Minute</label><input type="text" name="cron_minute" value="{{ row.cron_minute if row else '0' }}"></div>
+                <div><label>Hour</label><input type="text" name="cron_hour" value="{{ row.cron_hour if row else '6' }}"></div>
+                <div><label>Day</label><input type="text" name="cron_day" value="{{ row.cron_day if row else '*' }}"></div>
+                <div><label>Month</label><input type="text" name="cron_month" value="{{ row.cron_month if row else '*' }}"></div>
+                <div><label>Day of week</label><input type="text" name="cron_dow" value="{{ row.cron_dow if row else '*' }}"></div>
+            </div>
+            <p class="muted" style="margin-top:8px;">Examples: <code>0 6 * * *</code> = daily at 06:00 &middot; <code>*/30 * * * *</code> = every 30 min &middot; <code>0 8 * * 0-4</code> = weekdays at 08:00</p>
+        </div>
+
+        <div class="form-group">
+            <label>Targets
+                <span class="help" data-tip="Pick specific scrapers, or an entire group to auto-include any scraper added to that group in the future.">?</span>
+            </label>
+            {% set selected = (row.scrapers_list if row else []) %}
+            <div style="background:#f7fafc; padding:10px; border-radius:4px; margin-bottom:8px;">
+                <strong>Groups:</strong>
+                {% for g, keys in groups.items() %}
+                    <label style="display:inline-block;margin-right:14px;font-weight:400;">
+                        <input type="checkbox" name="targets" value="group:{{ g }}" style="width:auto;"
+                            {% if 'group:' + g in selected %}checked{% endif %}>
+                        group:{{ g }} ({{ keys|length }})
+                    </label>
+                {% endfor %}
+            </div>
+            <div style="background:#f7fafc; padding:10px; border-radius:4px;">
+                <strong>Individual scrapers:</strong><br>
+                {% for key, meta in registry.items() %}
+                    <label style="display:inline-block;margin-right:14px;font-weight:400;">
+                        <input type="checkbox" name="targets" value="{{ key }}" style="width:auto;"
+                            {% if key in selected %}checked{% endif %}>
+                        {{ meta[0] }}
+                    </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label><input type="checkbox" name="enabled" style="width:auto;" {% if not row or row.enabled %}checked{% endif %}> Enabled</label>
+        </div>
+
+        <button class="btn btn-primary">Save schedule</button>
+        <a class="btn btn-ghost" href="{{ url_for('schedules_page') }}">Cancel</a>
+    </form>
+</div>
+
+{% endblock %}

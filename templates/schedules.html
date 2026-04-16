@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Schedules{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Schedules
+        <span class="help" data-tip="A schedule runs a set of scrapers on a cron timetable. You can target individual scrapers or a whole group (e.g. all tenders). Each firing produces a report so you can see exactly what ran and what failed.">?</span>
+    </h2>
+    <p>
+        <a class="btn btn-primary" href="{{ url_for('new_schedule') }}">+ New schedule</a>
+        <a class="btn btn-ghost" href="{{ url_for('schedule_runs_page') }}">View run history</a>
+    </p>
+
+    {% if schedules %}
+    <table style="margin-top:12px;">
+        <thead><tr><th>Name</th><th>Cron (m h d mo dow)</th><th>Targets</th><th>Enabled</th><th>Last run</th><th></th></tr></thead>
+        <tbody>
+        {% for s in schedules %}
+            <tr>
+                <td><strong>{{ s.name }}</strong><br><span class="muted">{{ s.description or '' }}</span></td>
+                <td><code>{{ s.cron_minute }} {{ s.cron_hour }} {{ s.cron_day }} {{ s.cron_month }} {{ s.cron_dow }}</code></td>
+                <td>
+                    {% for t in s.scrapers_list %}
+                        <span class="badge badge-idle">{{ t }}</span>
+                    {% endfor %}
+                </td>
+                <td>{{ "yes" if s.enabled else "no" }}</td>
+                <td>
+                    {% if s.last_run_at %}{{ s.last_run_at[:19] }} <span class="badge badge-{{ s.last_status }}">{{ s.last_status }}</span>{% else %}<span class="muted">never</span>{% endif %}
+                </td>
+                <td>
+                    <form class="inline-form" method="post" action="{{ url_for('run_schedule_now', sid=s.id) }}">
+                        <button class="btn btn-sm btn-success">Run now</button>
+                    </form>
+                    <a class="btn btn-sm btn-ghost" href="{{ url_for('edit_schedule', sid=s.id) }}">Edit</a>
+                    <form class="inline-form" method="post" action="{{ url_for('delete_schedule', sid=s.id) }}" onsubmit="return confirm('Delete this schedule?');">
+                        <button class="btn btn-sm btn-danger">Delete</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No schedules defined yet.</p>
+    {% endif %}
+</div>
+
+{% endblock %}

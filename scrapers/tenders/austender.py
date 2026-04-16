@@ -10,6 +10,8 @@ from scrapers.base_scraper import BaseScraper
 
 class AusTenderScraper(BaseScraper):
     name = "austender"
+    source_group = "tenders"
+    record_type = "tender"
 
     RSS_URL = "https://www.tenders.gov.au/public_data/rss/rss.xml"
     BASE_URL = "https://www.tenders.gov.au"

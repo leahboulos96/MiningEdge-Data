@@ -11,6 +11,8 @@ from scrapers.base_scraper import BaseScraper
 
 class ASXScraper(BaseScraper):
     name = "asx_announcements"
+    source_group = "asx"
+    record_type = "announcement"
 
     ANNOUNCEMENTS_URL = f"{config.ASX_API_BASE}/companies/{{ticker}}/announcements"
     HEADER_URL = f"{config.ASX_API_BASE}/companies/{{ticker}}/header"

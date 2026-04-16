@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Records{% endblock %}
+{% block content %}
+
+<div class="card">
+    <h2>Review queue
+        <span class="help" data-tip="All records from all sources land here after each scrape. Approve sends them to the live feed (and fires a webhook if configured). Discard removes them permanently and blocks re-ingestion even if the same record is scraped again.">?</span>
+    </h2>
+
+    <div class="tabs">
+        <a href="{{ url_for('records_page', status='pending', source=source, q=search) }}"
+           class="{% if status == 'pending' %}active{% endif %}">Pending <span class="count">{{ counts.pending }}</span></a>
+        <a href="{{ url_for('records_page', status='approved', source=source, q=search) }}"
+           class="{% if status == 'approved' %}active{% endif %}">Approved <span class="count">{{ counts.approved }}</span></a>
+        <a href="{{ url_for('records_page', status='discarded', source=source, q=search) }}"
+           class="{% if status == 'discarded' %}active{% endif %}">Discarded <span class="count">{{ counts.discarded }}</span></a>
+    </div>
+
+    <div style="margin-bottom:10px;">
+        <span class="muted">Download current view:</span>
+        <a class="btn btn-sm btn-ghost" href="{{ url_for('export_records_route', format='json', status=status, source=source, q=search) }}">JSON</a>
+        <a class="btn btn-sm btn-ghost" href="{{ url_for('export_records_route', format='csv',  status=status, source=source, q=search) }}">CSV</a>
+        <a class="btn btn-sm btn-ghost" href="{{ url_for('export_records_route', format='xlsx', status=status, source=source, q=search) }}">XLSX</a>
+        <span class="help" data-tip="Exports every record matching the current filters. Same data is available via /api/v1/records/export with a Bearer token.">?</span>
+    </div>
+
+    {% set api_list = request.host_url + 'api/v1/records?status=' + status + (('&source=' + source) if source else '') + (('&q=' + search) if search else '') %}
+    {% set api_export = request.host_url + 'api/v1/records/export?format=csv&status=' + status + (('&source=' + source) if source else '') + (('&q=' + search) if search else '') %}
+    <div class="card" style="background:#f7fafc;">
+        <h2 style="font-size:14px;">API for this view
+            <span class="help" data-tip="These URLs reflect the filters currently selected above. Paste either one into the browser to view the data - no token required right now. Change format=csv to json or xlsx to switch export format.">?</span>
+        </h2>
+        <div style="background:#fff5f5; border:1px solid #fed7d7; color:#c53030; padding:8px 10px; border-radius:4px; margin-bottom:10px; font-size:13px;">
+            <strong>Note:</strong> these read endpoints are currently <strong>open</strong> (no API key required) so
+            you can paste them straight into the browser to inspect the JSON. Good for demos / viewing,
+            <strong>not safe for production</strong>.
+        </div>
+        <label style="margin-top:6px;">List endpoint (JSON paginated)</label>
+        <div class="row" style="gap:6px;">
+            <input type="text" id="api-list-url" value="{{ api_list }}" readonly onclick="this.select()">
+            <div style="flex:0 0 auto;"><button class="btn btn-sm btn-ghost" type="button" onclick="copyVal('api-list-url', this)">Copy</button></div>
+            <div style="flex:0 0 auto;"><a class="btn btn-sm btn-primary" href="{{ api_list }}" target="_blank">Open</a></div>
+        </div>
+        <label style="margin-top:8px;">Export endpoint (streams a file)</label>
+        <div class="row" style="gap:6px;">
+            <input type="text" id="api-export-url" value="{{ api_export }}" readonly onclick="this.select()">
+            <div style="flex:0 0 auto;"><button class="btn btn-sm btn-ghost" type="button" onclick="copyVal('api-export-url', this)">Copy</button></div>
+            <div style="flex:0 0 auto;"><a class="btn btn-sm btn-primary" href="{{ api_export }}" target="_blank">Open</a></div>
+        </div>
+        <p class="muted" style="margin-top:8px;">
+            curl example (no token needed right now):
+            <code style="user-select:all;">curl "{{ api_list }}"</code>
+        </p>
+    </div>
+
+    <form method="get" class="row" style="margin-bottom:12px;">
+        <input type="hidden" name="status" value="{{ status }}">
+        <div>
+            <label>Source</label>
+            <select name="source" onchange="this.form.submit()">
+                <option value="">All sources</option>
+                {% for s in sources %}
+                    <option value="{{ s }}" {% if s == source %}selected{% endif %}>{{ registry[s][0] if s in registry else s }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label>Search</label>
+            <input type="text" name="q" value="{{ search }}" placeholder="title / description / entity">
+        </div>
+        <div style="flex:0 0 auto;">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" type="submit">Filter</button>
+        </div>
+    </form>
+
+    {% if records %}
+    <table>
+        <thead><tr><th>Source</th><th>Title</th><th>Entity</th><th>Date</th><th>Scraped</th><th></th></tr></thead>
+        <tbody>
+        {% for r in records %}
+            <tr>
+                <td><span class="badge badge-idle">{{ registry[r.source][0] if r.source in registry else r.source }}</span></td>
+                <td><a href="{{ url_for('record_detail', record_id=r.id) }}">{{ (r.title or '(no title)')[:110] }}</a></td>
+                <td>{{ r.entity_name or "" }}</td>
+                <td>{{ r.published_date or "" }}</td>
+                <td class="muted">{{ r.scraped_at[:19] }}</td>
+                <td>
+                    {% if status == 'pending' %}
+                        <form class="inline-form" method="post" action="{{ url_for('approve_record', record_id=r.id) }}">
+                            <button class="btn btn-sm btn-success">Approve</button>
+                        </form>
+                        <form class="inline-form" method="post" action="{{ url_for('discard_record', record_id=r.id) }}">
+                            <button class="btn btn-sm btn-danger">Discard</button>
+                        </form>
+                    {% else %}
+                        <form class="inline-form" method="post" action="{{ url_for('restore_record', record_id=r.id) }}">
+                            <button class="btn btn-sm btn-warn" title="Move back to pending">Restore</button>
+                        </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    <div style="margin-top:12px;">
+        {% if page > 1 %}
+            <a class="btn btn-sm btn-ghost" href="{{ url_for('records_page', status=status, source=source, q=search, page=page-1) }}">&larr; Prev</a>
+        {% endif %}
+        <span class="muted">Page {{ page }} of {{ (total / limit)|round(0, 'ceil')|int or 1 }}</span>
+        {% if page * limit < total %}
+            <a class="btn btn-sm btn-ghost" href="{{ url_for('records_page', status=status, source=source, q=search, page=page+1) }}">Next &rarr;</a>
+        {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">No records match the current filter.</p>
+    {% endif %}
+</div>
+
+<div class="card" style="border:1px solid #fed7d7; background:#fff5f5;">
+    <h2 style="color:#c53030;">Danger zone
+        <span class="help" data-tip="These actions are irreversible. Use with care - consider downloading a backup from the Backup page first.">?</span>
+    </h2>
+    <form method="post" action="{{ url_for('wipe_all_records_route') }}" onsubmit="return dangerConfirm('records', {{ counts.pending + counts.approved + counts.discarded }});">
+        <input type="hidden" name="confirm" value="yes">
+        <p class="muted">Delete every record from the unified database ({{ counts.pending + counts.approved + counts.discarded }} total).
+           Daily JSON snapshots in <code>output/</code> and log files are NOT touched.</p>
+        <label style="margin:8px 0;font-weight:400;">
+            <input type="checkbox" name="clear_discarded_keys" style="width:auto;">
+            Also clear the permanent discarded-fingerprint list
+            <span class="help" data-tip="If checked, previously discarded records can be scraped again. Otherwise they stay blocked even after the wipe.">?</span>
+        </label>
+        <div><button class="btn btn-danger">Wipe all records</button></div>
+    </form>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+  function copyVal(id, btn) {
+    const el = document.getElementById(id);
+    el.select(); el.setSelectionRange(0, 999);
+    navigator.clipboard.writeText(el.value).then(() => {
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => { btn.textContent = old; }, 1200);
+    });
+  }
+  function dangerConfirm(label, n) {
+    if (!confirm('Delete all ' + n + ' ' + label + '? This cannot be undone.')) return false;
+    const typed = prompt('Type DELETE to confirm:');
+    return typed === 'DELETE';
+  }
+</script>
+{% endblock %}

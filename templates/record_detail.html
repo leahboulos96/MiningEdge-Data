@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Record #{{ rec.id }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <a href="{{ url_for('records_page', status=rec.status) }}" class="btn btn-sm btn-ghost">&larr; Back</a>
+    <h2 style="margin-top:12px;">
+        {{ rec.title or "(no title)" }}
+        <span class="badge badge-{{ rec.status }}">{{ rec.status }}</span>
+    </h2>
+    <p class="muted">
+        {{ rec.source }} &middot; {{ rec.record_type }} &middot; scraped {{ rec.scraped_at }}
+        {% if rec.reviewed_at %} &middot; reviewed by {{ rec.reviewed_by }} at {{ rec.reviewed_at }}{% endif %}
+    </p>
+
+    <table style="margin-top:16px;">
+        <tr><th style="width:200px;">External ID</th><td>{{ rec.external_id or "" }}</td></tr>
+        <tr><th>Entity</th><td>{{ rec.entity_name or "" }}</td></tr>
+        <tr><th>Region</th><td>{{ rec.region or "" }}</td></tr>
+        <tr><th>Published</th><td>{{ rec.published_date or "" }}</td></tr>
+        <tr><th>Closing</th><td>{{ rec.closing_date or "" }}</td></tr>
+        <tr><th>URL</th><td>{% if rec.url %}<a href="{{ rec.url }}" target="_blank">{{ rec.url }}</a>{% endif %}</td></tr>
+        <tr><th>PDF</th><td>{% if rec.pdf_url %}<a href="{{ rec.pdf_url }}" target="_blank">{{ rec.pdf_url }}</a>{% endif %}</td></tr>
+        <tr><th>Description</th><td>{{ rec.description or "" }}</td></tr>
+        {% if rec.review_notes %}<tr><th>Review notes</th><td>{{ rec.review_notes }}</td></tr>{% endif %}
+    </table>
+</div>
+
+{% if rec.status == 'pending' %}
+<div class="card">
+    <h2>Review</h2>
+    <form method="post" action="{{ url_for('approve_record', record_id=rec.id) }}" style="margin-bottom:12px;">
+        <div class="form-group">
+            <label>Approval notes (optional)</label>
+            <textarea name="notes" rows="2"></textarea>
+        </div>
+        <button class="btn btn-success">Approve
+            <span class="help" data-tip="Saves as approved and (if configured) fires the outbound webhook so your platform picks it up.">?</span>
+        </button>
+    </form>
+    <form method="post" action="{{ url_for('discard_record', record_id=rec.id) }}">
+        <div class="form-group">
+            <label>Reason for discarding (optional)</label>
+            <textarea name="reason" rows="2"></textarea>
+        </div>
+        <button class="btn btn-danger">Discard permanently
+            <span class="help" data-tip="The fingerprint of this record is stored forever. Even if the same record is scraped again in the future it will be skipped.">?</span>
+        </button>
+    </form>
+</div>
+{% else %}
+<div class="card">
+    <form method="post" action="{{ url_for('restore_record', record_id=rec.id) }}">
+        <button class="btn btn-warn">Restore to pending
+            <span class="help" data-tip="Moves the record back to the pending queue. For discarded records this also removes the permanent block so it can be scraped again in future runs.">?</span>
+        </button>
+    </form>
+</div>
+{% endif %}
+
+<div class="card">
+    <h2>AI enrichment
+        <span class="help" data-tip="When DeepSeek is enabled in Settings, this extracts commodity / region / stage / value estimate and a short analyst summary from the record.">?</span>
+    </h2>
+    {% if ai_enabled %}
+        <form method="post" action="{{ url_for('enrich_record', record_id=rec.id) }}">
+            <button class="btn btn-primary">Run DeepSeek enrichment</button>
+        </form>
+    {% else %}
+        <p class="muted">DeepSeek API key not configured. Add one in Settings to enable AI enrichment.</p>
+    {% endif %}
+    {% if rec.ai_summary %}
+        <h3 style="margin-top:12px;font-size:14px;">Summary</h3>
+        <p>{{ rec.ai_summary }}</p>
+    {% endif %}
+    {% if rec.enrichment_parsed %}
+        <h3 style="margin-top:12px;font-size:14px;">Extracted fields</h3>
+        <pre style="max-height:240px;">{{ rec.enrichment_parsed | tojson(indent=2) }}</pre>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Raw source data</h2>
+    <pre>{{ rec.raw_data_parsed | tojson(indent=2) }}</pre>
+</div>
+
+{% endblock %}

@@ -1,174 +1,164 @@
 {% extends "base.html" %}
-{% block title %}Dashboard - Scraper Dashboard{% endblock %}
+{% block title %}Dashboard{% endblock %}
 {% block content %}
 
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <h2 style="font-size: 20px;">Scrapers</h2>
-    <a href="{{ url_for('run_scraper', scraper_key='all') }}" class="btn btn-success">Run All Scrapers</a>
-</div>
-
-<div class="grid">
-{% for key, (label, cls) in scrapers.items() %}
-    {% set status = scraper_status.get(key, {}) %}
-    {% set is_running = running_scrapers.get(key, false) %}
-    <div class="card" id="scraper-{{ key }}">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-            <h2 style="margin: 0;">{{ label }}</h2>
-            <span class="badge" id="badge-{{ key }}">
-            {% if is_running %}
-                <span class="badge badge-running">Running</span>
-            {% elif status.get('status') == 'completed' %}
-                <span class="badge badge-completed">Completed</span>
-            {% elif status.get('status') == 'error' %}
-                <span class="badge badge-error">Error</span>
-            {% else %}
-                <span class="badge badge-idle">Idle</span>
-            {% endif %}
-            </span>
-        </div>
-
-        <div id="info-{{ key }}">
-        {% if status %}
-        <table>
-            {% if status.get('started') %}
-            <tr><td style="width: 100px; color: #718096;">Started</td><td>{{ status.started }}</td></tr>
-            {% endif %}
-            {% if status.get('finished') %}
-            <tr><td style="color: #718096;">Finished</td><td>{{ status.finished }}</td></tr>
-            {% endif %}
-            <tr><td style="color: #718096;">Items</td><td>{{ status.get('items', 0) }}</td></tr>
-            <tr><td style="color: #718096;">Errors</td><td>{{ status.get('errors', 0) }}</td></tr>
-            {% if status.get('error_message') %}
-            <tr><td style="color: #718096;">Message</td><td style="color: #c53030;">{{ status.error_message[:100] }}</td></tr>
-            {% endif %}
-        </table>
-        {% else %}
-        <p style="color: #a0aec0; font-size: 13px;">No runs yet</p>
-        {% endif %}
-        </div>
-
-        <div style="margin-top: 12px;" id="btn-{{ key }}">
-            {% if not is_running %}
-            <a href="{{ url_for('run_scraper', scraper_key=key) }}" class="btn btn-primary btn-sm">Run Now</a>
-            {% else %}
-            <span class="btn btn-sm" style="background: #e2e8f0; color: #718096; cursor: not-allowed;">Running...</span>
-            {% endif %}
+<div class="stats">
+    <div class="stat">
+        <div class="n">{{ pending }}</div>
+        <div class="l">Pending review
+            <span class="help" data-tip="New records scraped that have not been reviewed yet. Open the Records tab to approve or discard each one.">?</span>
         </div>
     </div>
-{% endfor %}
+    <div class="stat"><div class="n">{{ approved }}</div><div class="l">Approved</div></div>
+    <div class="stat">
+        <div class="n">{{ discarded }}</div>
+        <div class="l">Discarded
+            <span class="help" data-tip="Discarded records are remembered permanently. If the same record is scraped again it will NOT be added back to the queue.">?</span>
+        </div>
+    </div>
+    <div class="stat"><div class="n" id="running-count">{{ running|length }}</div><div class="l">Scrapers running now</div></div>
 </div>
 
-<div class="card" style="margin-top: 24px;">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-        <h2 style="margin: 0;">Output Files</h2>
-        {% if output_files %}
-        <a href="{{ url_for('delete_all_output') }}" class="btn btn-danger btn-sm" onclick="return confirm('Delete all output files?')">Delete All</a>
-        {% endif %}
-    </div>
-    {% if output_files %}
+<div class="card">
+    <h2>Quick actions
+        <span class="help" data-tip="Run all scrapers now, or run just one group (tenders, ASX, news, or a custom group you created). Each scraper runs independently - one failing won't stop the others.">?</span>
+    </h2>
+    <p>
+        <a href="{{ url_for('run_scraper', key='all') }}" class="btn btn-primary">Run ALL scrapers</a>
+        {% for group, keys in groups.items() %}
+            <a href="{{ url_for('run_scraper', key='group:' + group) }}" class="btn btn-ghost">Run {{ group }} ({{ keys|length }})</a>
+        {% endfor %}
+        <a href="{{ url_for('scrapers_page') }}" class="btn btn-ghost">Scrapers page</a>
+    </p>
+</div>
+
+<div class="card" id="live-panel" style="display:none;">
+    <h2>Live activity
+        <span class="help" data-tip="Real-time view of scrapers. Each run keeps its mini-terminal (last 60 log lines) on screen even after it finishes, so you can review what happened. Click 'Clear finished' to dismiss completed runs. The in-memory buffer holds up to 50 runs; older finished ones are dropped automatically.">?</span>
+        <button id="live-clear-btn" class="btn btn-sm btn-ghost" style="float:right;" type="button">Clear finished</button>
+    </h2>
+    <div id="live-runs"></div>
+</div>
+
+<div class="card">
+    <h2>Last schedule runs
+        <span class="help" data-tip="Every time a schedule fires, a report is saved. Click View to see which individual scrapers succeeded or failed.">?</span>
+    </h2>
+    {% if recent_schedule %}
     <table>
-        <thead>
-            <tr>
-                <th>File</th>
-                <th>Records</th>
-                <th>Size</th>
-                <th>Modified</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
+        <thead><tr><th>Schedule</th><th>Started</th><th>OK</th><th>Failed</th><th>New</th><th>Status</th><th></th></tr></thead>
         <tbody>
-        {% for f in output_files %}
+        {% for r in recent_schedule %}
             <tr>
-                <td>{{ f.name }}</td>
-                <td>{{ f.records }}</td>
-                <td>{{ "%.1f"|format(f.size / 1024) }} KB</td>
-                <td>{{ f.modified }}</td>
-                <td style="white-space: nowrap;">
-                    <a href="{{ url_for('view_output', filename=f.name) }}" class="btn btn-sm btn-success">View</a>
-                    <a href="{{ url_for('download_output', filename=f.name) }}" class="btn btn-sm btn-primary">JSON</a>
-                    <a href="{{ url_for('download_csv', filename=f.name) }}" class="btn btn-sm btn-primary">CSV</a>
-                    <a href="{{ url_for('download_xlsx', filename=f.name) }}" class="btn btn-sm btn-primary">XLSX</a>
-                    <a href="{{ url_for('delete_output', filename=f.name) }}" class="btn btn-sm btn-danger" onclick="return confirm('Delete {{ f.name }}?')">Delete</a>
+                <td>{{ r.schedule_name }}</td>
+                <td>{{ r.started_at }}</td>
+                <td>{{ r.scrapers_ok }}</td>
+                <td>{{ r.scrapers_failed }}</td>
+                <td>{{ r.total_new }}</td>
+                <td><span class="badge badge-{{ r.status }}">{{ r.status }}</span></td>
+                <td>
+                    <a class="btn btn-sm btn-ghost" href="{{ url_for('schedule_run_detail', run_id=r.id) }}">View</a>
+                    <form class="inline-form" method="post" action="{{ url_for('delete_schedule_run_route', run_id=r.id) }}" onsubmit="return confirm('Remove this schedule run?');">
+                        <button class="btn btn-sm btn-danger">Remove</button>
+                    </form>
                 </td>
             </tr>
         {% endfor %}
         </tbody>
     </table>
     {% else %}
-    <p style="color: #a0aec0; font-size: 13px;">No output files yet. Run a scraper to generate data.</p>
+    <p class="muted">No scheduled runs yet. Create a schedule on the Schedules page.</p>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h2>Recent scraper runs</h2>
+    {% if recent_scrapers %}
+    <table>
+        <thead><tr><th>Scraper</th><th>Started</th><th>Status</th><th>Found</th><th>New</th><th>Error</th><th></th></tr></thead>
+        <tbody>
+        {% for r in recent_scrapers %}
+            <tr>
+                <td>{{ registry[r.scraper][0] if r.scraper in registry else r.scraper }}</td>
+                <td>{{ r.started_at }}</td>
+                <td><span class="badge badge-{{ 'ok' if r.status=='completed' else r.status }}">{{ r.status }}</span></td>
+                <td>{{ r.items_found }}</td>
+                <td>{{ r.items_new }}</td>
+                <td class="muted">{{ (r.error_message or "")[:60] }}</td>
+                <td>
+                    <form class="inline-form" method="post" action="{{ url_for('delete_scraper_run_route', run_id=r.id) }}" onsubmit="return confirm('Remove this run?');">
+                        <button class="btn btn-sm btn-danger">Remove</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No runs yet.</p>
     {% endif %}
 </div>
 
 {% endblock %}
-
 {% block scripts %}
+<style>
+  .live-run { border:1px solid #e2e8f0; border-radius:6px; padding:12px; margin-bottom:12px; }
+  .live-run h3 { font-size:14px; margin-bottom:4px; }
+  .live-run .meta { font-size:12px; color:#718096; margin-bottom:6px; }
+  .progressbar { height:6px; background:#edf2f7; border-radius:3px; overflow:hidden; margin:6px 0; position:relative; }
+  .progressbar > span { position:absolute; left:0; top:0; bottom:0; width:40%; background:linear-gradient(90deg,#3182ce,#63b3ed); animation:slide 1.4s infinite ease-in-out; }
+  .progressbar.done > span { animation:none; width:100%; background:#38a169; }
+  .progressbar.err  > span { animation:none; width:100%; background:#e53e3e; }
+  @keyframes slide { 0%{left:-40%} 50%{left:30%} 100%{left:100%} }
+  .live-term { background:#1a1a2e; color:#a0aec0; font-family: "SF Mono", Consolas, monospace; font-size:11px; padding:8px 10px; border-radius:4px; max-height:180px; overflow-y:auto; white-space:pre-wrap; line-height:1.4; }
+  .live-term .LINE-ERROR { color:#fca5a5; }
+  .live-term .LINE-WARN  { color:#fbd38d; }
+  .live-term .LINE-INFO  { color:#bee3f8; }
+</style>
 <script>
-// AJAX status polling - always active, updates cards without page reload
-(function() {
-    var scraperKeys = {{ scrapers.keys()|list|tojson }};
-    var runUrls = {};
-    {% for key in scrapers.keys() %}
-    runUrls["{{ key }}"] = "{{ url_for('run_scraper', scraper_key=key) }}";
-    {% endfor %}
+  async function refreshLive() {
+    try {
+      const r = await fetch("{{ url_for('live_json') }}", {cache:"no-store"});
+      const data = await r.json();
+      const panel = document.getElementById('live-panel');
+      const host  = document.getElementById('live-runs');
+      const runs  = data.runs || [];
 
-    function updateStatus() {
-        fetch("{{ url_for('status_api') }}")
-            .then(function(r) { return r.json(); })
-            .then(function(data) {
-                var statuses = data.scraper_status || {};
-                var running = data.running || {};
+      if (!runs.length) { panel.style.display = 'none'; host.innerHTML=''; return; }
+      panel.style.display = 'block';
 
-                for (var i = 0; i < scraperKeys.length; i++) {
-                    var key = scraperKeys[i];
-                    var s = statuses[key] || {};
-                    var isRunning = !!running[key];
+      host.innerHTML = runs.map(e => {
+        const barCls = e.status === 'running' ? '' : (e.status === 'error' ? 'err' : 'done');
+        const lines = (e.log || []).map(l => {
+          let cls = '';
+          if (/ ERROR/.test(l)) cls='LINE-ERROR';
+          else if (/ WARN/.test(l)) cls='LINE-WARN';
+          else if (/ INFO/.test(l)) cls='LINE-INFO';
+          return `<div class="${cls}">${l.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</div>`;
+        }).join('');
+        const badge = e.status === 'running'
+          ? `<span class="badge badge-running">running</span>`
+          : `<span class="badge badge-${e.status==='ok'?'ok':'error'}">${e.status}</span>`;
+        return `<div class="live-run">
+          <h3>${e.label} ${badge}</h3>
+          <div class="meta">run #${e.run_id} &middot; started ${e.started_at} &middot;
+            found <strong>${e.items_found}</strong> &middot; new <strong>${e.items_new}</strong> &middot; skipped ${e.items_skipped}</div>
+          <div class="progressbar ${barCls}"><span></span></div>
+          <div class="live-term">${lines || '&nbsp;'}</div>
+        </div>`;
+      }).join('');
 
-                    // Update badge
-                    var badgeEl = document.getElementById("badge-" + key);
-                    if (badgeEl) {
-                        if (isRunning) {
-                            badgeEl.innerHTML = '<span class="badge badge-running">Running</span>';
-                        } else if (s.status === "completed") {
-                            badgeEl.innerHTML = '<span class="badge badge-completed">Completed</span>';
-                        } else if (s.status === "error") {
-                            badgeEl.innerHTML = '<span class="badge badge-error">Error</span>';
-                        } else {
-                            badgeEl.innerHTML = '<span class="badge badge-idle">Idle</span>';
-                        }
-                    }
+      document.getElementById('running-count').textContent =
+        runs.filter(r => r.status === 'running').length;
+    } catch (e) { /* ignore transient errors */ }
+  }
+  refreshLive();
+  setInterval(refreshLive, 1500);
 
-                    // Update info table
-                    var infoEl = document.getElementById("info-" + key);
-                    if (infoEl && s.status) {
-                        var html = "<table>";
-                        if (s.started) html += '<tr><td style="width:100px;color:#718096;">Started</td><td>' + s.started + '</td></tr>';
-                        if (s.finished) html += '<tr><td style="color:#718096;">Finished</td><td>' + s.finished + '</td></tr>';
-                        html += '<tr><td style="color:#718096;">Items</td><td>' + (s.items || 0) + '</td></tr>';
-                        html += '<tr><td style="color:#718096;">Errors</td><td>' + (s.errors || 0) + '</td></tr>';
-                        if (s.error_message) html += '<tr><td style="color:#718096;">Message</td><td style="color:#c53030;">' + s.error_message.substring(0, 100) + '</td></tr>';
-                        html += "</table>";
-                        infoEl.innerHTML = html;
-                    }
-
-                    // Update button
-                    var btnEl = document.getElementById("btn-" + key);
-                    if (btnEl) {
-                        if (isRunning) {
-                            btnEl.innerHTML = '<span class="btn btn-sm" style="background:#e2e8f0;color:#718096;cursor:not-allowed;">Running...</span>';
-                        } else {
-                            btnEl.innerHTML = '<a href="' + runUrls[key] + '" class="btn btn-primary btn-sm">Run Now</a>';
-                        }
-                    }
-                }
-            })
-            .catch(function() {});
-
-        // Always keep polling while on dashboard
-        setTimeout(updateStatus, 3000);
-    }
-
-    // First update immediately on page load, then every 3s
-    updateStatus();
-})();
+  document.getElementById('live-clear-btn').addEventListener('click', async () => {
+    if (!confirm('Dismiss all finished terminals? Running scrapers are kept.')) return;
+    await fetch("{{ url_for('live_clear') }}", {method:'POST'});
+    refreshLive();
+  });
 </script>
 {% endblock %}

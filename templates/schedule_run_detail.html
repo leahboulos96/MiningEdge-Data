@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}Schedule run #{{ run.id }}{% endblock %}
+{% block content %}
+
+<div class="card">
+    <a href="{{ url_for('schedule_runs_page') }}" class="btn btn-sm btn-ghost">&larr; Back</a>
+    <h2 style="margin-top:12px;">{{ run.schedule_name }} <span class="badge badge-{{ run.status }}">{{ run.status }}</span></h2>
+    <p class="muted">Started {{ run.started_at }} &middot; Ended {{ run.ended_at or "(running)" }}</p>
+    <p>
+        <strong>{{ run.scrapers_ok }}</strong> scrapers succeeded &middot;
+        <strong>{{ run.scrapers_failed }}</strong> failed &middot;
+        <strong>{{ run.total_new }}</strong> new records ingested
+    </p>
+</div>
+
+<div class="card">
+    <h2>Per-scraper breakdown</h2>
+    {% if run.scraper_runs %}
+    <table>
+        <thead><tr><th>Scraper</th><th>Status</th><th>Found</th><th>New</th><th>Skipped</th><th>Error</th></tr></thead>
+        <tbody>
+        {% for sr in run.scraper_runs %}
+            <tr>
+                <td>{{ registry[sr.scraper][0] if sr.scraper in registry else sr.scraper }}</td>
+                <td><span class="badge badge-{{ 'ok' if sr.status=='completed' else sr.status }}">{{ sr.status }}</span></td>
+                <td>{{ sr.items_found }}</td>
+                <td>{{ sr.items_new }}</td>
+                <td>{{ sr.items_skipped }}</td>
+                <td class="muted">{{ (sr.error_message or '')[:200] }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="muted">No per-scraper details.</p>
+    {% endif %}
+</div>
+
+{% endblock %}
