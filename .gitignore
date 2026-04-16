@@ -13,3 +13,5 @@ icn_cookies.json
 venv/
 .pytest_cache/
 miningedge.db
+.DS_Store
+Thumbs.db
